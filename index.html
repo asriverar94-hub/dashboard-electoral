@@ -1,0 +1,499 @@
+```html
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Electoral ONPE</title>
+
+<style>
+:root{
+    --keiko:#ff9800;
+    --roberto:#4caf50;
+    --border:#ddd;
+    --bg:#f5f5f5;
+}
+
+body{
+    font-family:Arial,Helvetica,sans-serif;
+    margin:20px;
+    background:var(--bg);
+}
+
+h1{
+    text-align:center;
+}
+
+.cards{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+    gap:10px;
+    margin-bottom:20px;
+}
+
+.card{
+    background:white;
+    border-radius:8px;
+    padding:15px;
+    box-shadow:0 1px 3px rgba(0,0,0,.15);
+}
+
+.card h3{
+    margin:0 0 8px 0;
+}
+
+.toolbar{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:15px;
+}
+
+input[type="text"]{
+    padding:8px;
+    width:300px;
+    max-width:100%;
+}
+
+button{
+    padding:8px 12px;
+    cursor:pointer;
+}
+
+.table-container{
+    overflow:auto;
+    max-height:75vh;
+    background:white;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+th,td{
+    border:1px solid var(--border);
+    padding:8px;
+    text-align:center;
+}
+
+th{
+    background:#ececec;
+    position:sticky;
+    top:0;
+    cursor:pointer;
+    z-index:2;
+}
+
+tr.keiko{
+    background:#fff3e0;
+}
+
+tr.roberto{
+    background:#e8f5e9;
+}
+
+.actualizacion{
+    text-align:right;
+    margin-bottom:10px;
+    color:#555;
+}
+
+.positivo{
+    color:green;
+    font-weight:bold;
+}
+
+.negativo{
+    color:#c62828;
+    font-weight:bold;
+}
+
+.small{
+    font-size:.9em;
+    color:#666;
+}
+</style>
+</head>
+<body>
+
+<h1>Dashboard Electoral ONPE</h1>
+
+<div class="actualizacion" id="actualizacion">
+Cargando...
+</div>
+
+<div class="cards" id="cards"></div>
+
+<div class="toolbar">
+<div>
+<input type="text"
+       id="busqueda"
+       placeholder="Buscar departamento...">
+</div>
+
+<div>
+<button onclick="exportarCSV()">
+Exportar CSV
+</button>
+</div>
+</div>
+
+<div class="table-container">
+<table id="tabla">
+<thead>
+<tr>
+<th onclick="ordenar('departamento')">Departamento</th>
+<th onclick="ordenar('ganador')">Ganador</th>
+<th onclick="ordenar('keiko')">Votos Keiko</th>
+<th onclick="ordenar('keikoPct')">% Keiko</th>
+<th onclick="ordenar('roberto')">Votos Roberto</th>
+<th onclick="ordenar('robertoPct')">% Roberto</th>
+<th onclick="ordenar('diferencia')">Diferencia</th>
+<th onclick="ordenar('actas')">Actas</th>
+<th onclick="ordenar('avance')">% Avance</th>
+<th onclick="ordenar('observadas')">Observadas</th>
+<th onclick="ordenar('pendientes')">Pendientes</th>
+</tr>
+</thead>
+<tbody id="tbody"></tbody>
+</table>
+</div>
+
+<script>
+
+const BASE =
+"https://resultadosegundavuelta.onpe.gob.pe/presentacion-backend";
+
+const ID_ELECCION = 10;
+const ID_AMBITO = 1;
+
+let datosDepartamentos = [];
+let ordenActual = "diferencia";
+let ascendente = false;
+
+function numero(n){
+    return Number(n).toLocaleString("es-PE");
+}
+
+function pct(n){
+    return Number(n).toFixed(3) + "%";
+}
+
+async function obtenerJSON(url){
+    const r = await fetch(url);
+    return await r.json();
+}
+
+async function cargarResumenNacional(){
+
+    const [totales, participantes] =
+    await Promise.all([
+
+        obtenerJSON(
+            `${BASE}/resumen-general/totales?idEleccion=${ID_ELECCION}&tipoFiltro=eleccion`
+        ),
+
+        obtenerJSON(
+            `${BASE}/resumen-general/participantes?idEleccion=${ID_ELECCION}&tipoFiltro=eleccion`
+        )
+
+    ]);
+
+    const t = totales.data;
+
+    const p1 = participantes.data[0];
+    const p2 = participantes.data[1];
+
+    const diferencia =
+    Math.abs(
+        p1.totalVotosValidos -
+        p2.totalVotosValidos
+    );
+
+    document.getElementById("cards").innerHTML = `
+
+    <div class="card">
+        <h3>Keiko Fujimori</h3>
+        <div>${numero(p1.totalVotosValidos)} votos</div>
+        <div>${pct(p1.porcentajeVotosValidos)}</div>
+    </div>
+
+    <div class="card">
+        <h3>Roberto Sánchez</h3>
+        <div>${numero(p2.totalVotosValidos)} votos</div>
+        <div>${pct(p2.porcentajeVotosValidos)}</div>
+    </div>
+
+    <div class="card">
+        <h3>Diferencia Nacional</h3>
+        <div>${numero(diferencia)} votos</div>
+    </div>
+
+    <div class="card">
+        <h3>Actas Contabilizadas</h3>
+        <div>${numero(t.contabilizadas)}</div>
+        <div>${pct(t.actasContabilizadas)}</div>
+    </div>
+
+    <div class="card">
+        <h3>Actas Observadas</h3>
+        <div>${numero(t.enviadasJee)}</div>
+        <div>${pct(t.actasEnviadasJee)}</div>
+    </div>
+
+    <div class="card">
+        <h3>Actas Pendientes</h3>
+        <div>${numero(t.pendientesJee)}</div>
+        <div>${pct(t.actasPendientesJee)}</div>
+    </div>
+    `;
+}
+
+async function cargarDepartamentos(){
+
+    const depResponse =
+    await obtenerJSON(
+      `${BASE}/ubigeos/departamentos?idEleccion=${ID_ELECCION}&idAmbitoGeografico=${ID_AMBITO}`
+    );
+
+    const departamentos = depResponse.data;
+
+    const consultas = departamentos.map(async dep => {
+
+        const [part, total] =
+        await Promise.all([
+
+            obtenerJSON(
+                `${BASE}/resumen-general/participantes?idEleccion=${ID_ELECCION}&tipoFiltro=ubigeo_nivel_01&idAmbitoGeografico=${ID_AMBITO}&idUbigeoDepartamento=${dep.ubigeo}`
+            ),
+
+            obtenerJSON(
+                `${BASE}/resumen-general/totales?idEleccion=${ID_ELECCION}&tipoFiltro=ubigeo_nivel_01&idAmbitoGeografico=${ID_AMBITO}&idUbigeoDepartamento=${dep.ubigeo}`
+            )
+
+        ]);
+
+        const p1 = part.data[0];
+        const p2 = part.data[1];
+
+        const ganador =
+        p1.totalVotosValidos >
+        p2.totalVotosValidos
+            ? p1
+            : p2;
+
+        return {
+
+            departamento: dep.nombre,
+
+            ganador:
+                ganador.nombreCandidato,
+
+            keiko:
+                p1.totalVotosValidos,
+
+            keikoPct:
+                p1.porcentajeVotosValidos,
+
+            roberto:
+                p2.totalVotosValidos,
+
+            robertoPct:
+                p2.porcentajeVotosValidos,
+
+            diferencia:
+                Math.abs(
+                    p1.totalVotosValidos -
+                    p2.totalVotosValidos
+                ),
+
+            contabilizadas:
+                total.data.contabilizadas,
+
+            totalActas:
+                total.data.totalActas,
+
+            avance:
+                total.data.actasContabilizadas,
+
+            observadas:
+                total.data.enviadasJee,
+
+            pendientes:
+                total.data.pendientesJee
+
+        };
+
+    });
+
+    datosDepartamentos =
+        await Promise.all(consultas);
+
+    renderTabla();
+}
+
+function renderTabla(){
+
+    ordenarInterno();
+
+    const filtro =
+    document
+    .getElementById("busqueda")
+    .value
+    .toLowerCase();
+
+    const tbody =
+    document.getElementById("tbody");
+
+    tbody.innerHTML = "";
+
+    datosDepartamentos
+    .filter(x =>
+        x.departamento
+        .toLowerCase()
+        .includes(filtro)
+    )
+    .forEach(dep => {
+
+        const fila =
+        document.createElement("tr");
+
+        fila.className =
+        dep.ganador.includes("FUJIMORI")
+            ? "keiko"
+            : "roberto";
+
+        fila.innerHTML = `
+        <td>${dep.departamento}</td>
+        <td>${dep.ganador}</td>
+        <td>${numero(dep.keiko)}</td>
+        <td>${pct(dep.keikoPct)}</td>
+        <td>${numero(dep.roberto)}</td>
+        <td>${pct(dep.robertoPct)}</td>
+        <td>${numero(dep.diferencia)}</td>
+        <td>${numero(dep.contabilizadas)} / ${numero(dep.totalActas)}</td>
+        <td>${pct(dep.avance)}</td>
+        <td>${numero(dep.observadas)}</td>
+        <td>${numero(dep.pendientes)}</td>
+        `;
+
+        tbody.appendChild(fila);
+    });
+
+}
+
+function ordenar(campo){
+
+    if(ordenActual === campo)
+        ascendente = !ascendente;
+    else{
+        ordenActual = campo;
+        ascendente = false;
+    }
+
+    renderTabla();
+}
+
+function ordenarInterno(){
+
+    datosDepartamentos.sort((a,b)=>{
+
+        let v1 = a[ordenActual];
+        let v2 = b[ordenActual];
+
+        if(typeof v1 === "string"){
+            return ascendente
+                ? v1.localeCompare(v2)
+                : v2.localeCompare(v1);
+        }
+
+        return ascendente
+            ? v1 - v2
+            : v2 - v1;
+    });
+}
+
+function exportarCSV(){
+
+    let csv =
+"Departamento,Ganador,Votos Keiko,% Keiko,Votos Roberto,% Roberto,Diferencia,Actas,Avance,Observadas,Pendientes\n";
+
+    datosDepartamentos.forEach(d=>{
+
+        csv += [
+            d.departamento,
+            d.ganador,
+            d.keiko,
+            d.keikoPct,
+            d.roberto,
+            d.robertoPct,
+            d.diferencia,
+            d.contabilizadas,
+            d.avance,
+            d.observadas,
+            d.pendientes
+        ].join(",") + "\n";
+
+    });
+
+    const blob =
+    new Blob([csv],
+    {type:"text/csv;charset=utf-8;"});
+
+    const url =
+    URL.createObjectURL(blob);
+
+    const link =
+    document.createElement("a");
+
+    link.href = url;
+    link.download =
+        "resultados_onpe.csv";
+
+    link.click();
+
+    URL.revokeObjectURL(url);
+}
+
+async function cargarTodo(){
+
+    try{
+
+        await cargarResumenNacional();
+
+        await cargarDepartamentos();
+
+        document
+        .getElementById("actualizacion")
+        .innerText =
+        "Última actualización: " +
+        new Date().toLocaleString("es-PE");
+
+    }
+    catch(error){
+
+        console.error(error);
+
+        document
+        .getElementById("actualizacion")
+        .innerText =
+        "Error cargando datos. Posible bloqueo CORS.";
+    }
+}
+
+document
+.getElementById("busqueda")
+.addEventListener("input",renderTabla);
+
+cargarTodo();
+
+setInterval(cargarTodo,60000);
+
+</script>
+
+</body>
+</html>
+```
