@@ -183,24 +183,15 @@ function pct(n){
 }
 
 async function obtenerJSON(urlOriginal) {
-    // Usamos el proxy "allorigins" para saltar el bloqueo de seguridad CORS de la ONPE
-    const urlConProxy = `https://api.allorigins.win/get?url=${encodeURIComponent(urlOriginal)}`;
-    
-    try {
-        const respuesta = await fetch(urlConProxy);
-        if (!respuesta.ok) throw new Error('Error al conectar con el servidor puente');
-        
-        const wrapper = await respuesta.json();
-        
-        // El proxy nos devuelve los datos reales guardados dentro de un texto llamado "contents"
-        // Aquí lo transformamos en un objeto que JavaScript pueda entender de forma nativa
-        const datosReales = JSON.parse(wrapper.contents);
-        
-        return datosReales;
-    } catch (error) {
-        console.error("Error al obtener los datos mediante el proxy:", error);
-        throw error;
+    const respuesta = await fetch(
+        "https://onpe-proxy.netlify.app/.netlify/functions/onpe"
+    );
+
+    if (!respuesta.ok) {
+        throw new Error("Error en proxy Netlify");
     }
+
+    return await respuesta.json();
 }
 
 async function cargarResumenNacional(){
